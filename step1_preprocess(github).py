@@ -2,11 +2,13 @@ import re
 import copy
 import pandas as pd
 
+
 # 한 문장에 대해 input & label 생성하는 함수
-def preprocess(sent):
+def preprocess(sent, pos2word):
     token_list = sent.split(' ')  # 문장을 공백 단위로 토큰화
     temp_sent = ' '.join(token_list).strip()  # 문장의 양 끝에 있는 공백 제거
     word_pos_label_list = []  # 문장에 대한 label
+    word_pos_sent_list = []
 
     # 공백 단위로 토큰화 된 문장에서 토큰을 하나씩 살펴보며 단어와 Pos 태그의 매핑을 찾는다.
     for i in range(len(token_list)):
@@ -25,6 +27,8 @@ def preprocess(sent):
                 if POS != '':
                     word = ' '.join(label_list).split('<')[-1].split(':')[0]  # 단어 파악: ex> 한지원
                     word_pos_label_list.append(word + '[' + POS + ']')  # label 생성: ex> 한지원[PS]
+                    word_pos_sent_list.append(word + ' is a ' + pos2word[POS] + ' entity,')
+
                 else:
                     pass
             # <> 표시만 있고 Pos가 없는 경우: ex> <서울>
@@ -57,27 +61,32 @@ def preprocess(sent):
                 POS = label_list[last_idx].split('>')[0].split(':')[-1]  # 영단어로 이루어진 Pos 태그 파악: ex> QT
                 word = ' '.join(label_list).split('<')[-1].split(':')[0]  # 단어 파악: ex> 열 두명 미국인
                 word_pos_label_list.append(word + '[' + POS + ']')  # label 생성: ex> 열 두명 미국인[QT]
+                word_pos_sent_list.append(word + ' is a ' + pos2word[POS] + ' entity,')
 
             # <> 표시만 있고 Pos가 없는 경우: ex> <스 타 벅스>
             # 이 경우는 단어와 Pos 태그가 매핑되지 않았기 때문에 pass
             else:
                 pass
 
-    label_ch_sent = '\t'.join(word_pos_label_list)  # 문장 sent에 대한 각 label을 '\t'으로 join
-    return ' '.join(token_list), label_ch_sent
+    word_pos_label = '\t'.join(word_pos_label_list)  # 문장 sent에 대한 각 label을 '\t'으로 join
+    word_pos_sent = ' '.join(word_pos_sent_list)  # 문장 sent에 대한 각 label을 '\t'으로 join
+
+    return 'ner: ' + ' '.join(token_list), word_pos_label, word_pos_sent
 
 
 # input & label로 구성된 dataframe 생성하는 함수
-def get_dataframe(lines):
+def get_dataframe(lines, pos2word):
     input_text_list = []
     label_text_list = []
+    label_sent_list = []
 
     for i, sent in enumerate(lines):
-        input_text, label_text = preprocess(sent)
+        input_text, label_text, label_sent = preprocess(sent, pos2word)
         input_text_list.append(input_text)
         label_text_list.append(label_text)
+        label_sent_list.append(label_sent)
 
-    my_dict = {'input': input_text_list, 'label': label_text_list}
+    my_dict = {'input': input_text_list, 'label': label_text_list, 'sent_label': label_sent_list}
 
     df = pd.DataFrame(my_dict)
 
@@ -99,9 +108,12 @@ def pos_tag(x, mapping_pos):
 
 
 # 모델 학습을 위한 데이터 셋 생성하는 함수
-def get_complete_dataframe(df, file_path):
+def get_complete_dataframe_v1(df, file_path=None):
     df['label'] = df['label'].apply(lambda x: pos_tag(x.split('\t'), mapping_pos))
-    df.to_csv(file_path)
+    if file_path:
+        df.to_csv(file_path)
+    else:
+        pass
     return df
 
 if __name__=="__main__":
@@ -115,6 +127,37 @@ if __name__=="__main__":
     mapping_pos = {'[PS]': '@', '[TI]': '#', '[LC]': '$', \
                    '[OG]': '&', '[QT]': '`', '[DT]': '='}
 
-    temp_df = get_dataframe(lines)
+    pos2word = {'PS': 'person', 'TI': 'time', 'LC': 'location', \
+                'OG': 'organization', 'QT': 'quantity', 'DT': 'date'}
 
-    df = get_complete_dataframe(temp_df, file_path)
+    temp_df = get_dataframe(lines, pos2word)
+
+    df = get_complete_dataframe_v1(temp_df, file_path)
+
+    print(df.shape)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
